@@ -1,11 +1,12 @@
 {
   "name": "OpenClaw Gateway",
-  "version": "0.2.17",
+  "version": "0.2.18",
   "slug": "clawdbot_gateway",
   "description": "OpenClaw Gateway (SSH-tunneled, HA add-on)",
   "url": "https://github.com/openclaw/openclaw",
   "documentation": "https://docs.openclaw.ai",
   "arch": ["aarch64", "armv7", "amd64"],
+  "image": "ghcr.io/ngutman/{arch}-clawdbot-gateway",
   "startup": "services",
   "boot": "auto",
   "host_network": true,
@@ -17,6 +18,7 @@
     "GH_CONFIG_DIR": "/config/openclaw/.config/gh"
   },
   "options": {
+    "install_mode": "package",
     "port": 18789,
     "verbose": false,
     "repo_url": "https://github.com/openclaw/openclaw.git",
@@ -26,6 +28,7 @@
     "ssh_authorized_keys": ""
   },
   "schema": {
+    "install_mode": "list(package|source)",
     "port": "int(1,65535)",
     "verbose": "bool",
     "repo_url": "str",

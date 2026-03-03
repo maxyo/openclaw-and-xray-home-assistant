@@ -21,20 +21,21 @@ This add-on runs the OpenClaw Gateway on Home Assistant OS, providing secure rem
 
 | Option | Description |
 |--------|-------------|
+| `install_mode` | `package` (default, no build) or `source` (clone + build from repo) |
 | `ssh_authorized_keys` | Your public key(s) for SSH access (required for tunnels) |
 | `ssh_port` | SSH server port (default: `2222`) |
 | `port` | Gateway WebSocket port (default: `18789`) |
-| `repo_url` | OpenClaw source repository URL |
-| `branch` | Branch to checkout (uses repo's default if omitted) |
-| `github_token` | Token for private repository access |
+| `repo_url` | OpenClaw source repository URL (used in `source` mode) |
+| `branch` | Branch to checkout (uses repo's default if omitted, `source` mode only) |
+| `github_token` | Token for private repository access (`source` mode only) |
 | `verbose` | Enable verbose logging |
 
 ### First Run
 
 The add-on performs these steps on startup:
 
-1. Clones or updates the OpenClaw repo into `/config/openclaw/openclaw-src`
-2. Installs dependencies and builds the gateway (only if the repo changed)
+1. If `install_mode=source`: clones/updates `/config/openclaw/openclaw-src` and builds when needed
+2. If `install_mode=package` (default): uses the preinstalled OpenClaw npm package (no source build)
 3. Runs `openclaw setup` if no config exists
 4. Ensures `gateway.auth.token` exists (if config exists but token missing)
 5. Starts the gateway
@@ -45,7 +46,6 @@ SSH into the add-on and run the configurator:
 
 ```bash
 ssh -p 2222 root@<ha-host>
-cd /config/openclaw/openclaw-src
 openclaw onboard
 ```
 
@@ -54,6 +54,8 @@ Or use the shorter flow:
 ```bash
 openclaw configure
 ```
+
+If you are in `install_mode=source`, the checked out repo lives at `/config/openclaw/openclaw-src`.
 
 The gateway auto-reloads config changes. Restart the add-on only if you change SSH keys or build settings:
 
@@ -113,7 +115,7 @@ ha addons logs <addon-slug> -n 200
 ```
 
 ### Build takes too long
-The first boot runs a full build and may take several minutes. Subsequent starts are faster.
+Use `install_mode=package` (default) to avoid source builds entirely. Source mode first boot may take several minutes.
 
 ## Security Notes
 

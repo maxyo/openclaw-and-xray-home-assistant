@@ -5,7 +5,7 @@ log() {
   printf "[addon] %s\n" "$*"
 }
 
-log "run.sh version=2026-02-01-openclaw-only"
+log "run.sh version=2026-03-03-package-default"
 
 BASE_DIR=/config/openclaw
 STATE_DIR="${BASE_DIR}/.openclaw"
@@ -74,18 +74,23 @@ auth_from_opts() {
   fi
 }
 
-REPO_URL="$(jq -r .repo_url /data/options.json)"
-BRANCH="$(jq -r .branch /data/options.json 2>/dev/null || true)"
-TOKEN_OPT="$(jq -r .github_token /data/options.json)"
-
-if [ -z "${REPO_URL}" ] || [ "${REPO_URL}" = "null" ]; then
-  log "repo_url is empty; set it in add-on options"
-  exit 1
+INSTALL_MODE="$(jq -r '.install_mode // "package"' /data/options.json 2>/dev/null || true)"
+if [ -z "${INSTALL_MODE}" ] || [ "${INSTALL_MODE}" = "null" ]; then
+  INSTALL_MODE="package"
 fi
+case "${INSTALL_MODE}" in
+  package|source)
+    ;;
+  *)
+    log "invalid install_mode=${INSTALL_MODE}; falling back to package"
+    INSTALL_MODE="package"
+    ;;
+esac
+log "install_mode=${INSTALL_MODE}"
 
-if [ -n "${TOKEN_OPT}" ] && [ "${TOKEN_OPT}" != "null" ]; then
-  REPO_URL="https://${TOKEN_OPT}@${REPO_URL#https://}"
-fi
+REPO_URL="$(jq -r '.repo_url // empty' /data/options.json 2>/dev/null || true)"
+BRANCH="$(jq -r '.branch // ""' /data/options.json 2>/dev/null || true)"
+TOKEN_OPT="$(jq -r '.github_token // ""' /data/options.json 2>/dev/null || true)"
 
 SSH_PORT="$(jq -r .ssh_port /data/options.json 2>/dev/null || true)"
 SSH_KEYS="$(auth_from_opts || true)"
@@ -133,14 +138,6 @@ else
   log "sshd disabled (no authorized keys)"
 fi
 
-if [ "${BRANCH}" = "null" ]; then
-  BRANCH=""
-fi
-
-if [ -n "${BRANCH}" ]; then
-  log "branch=${BRANCH}"
-fi
-
 require_openclaw_repo() {
   local name
   if [ ! -f "${REPO_DIR}/package.json" ]; then
@@ -169,82 +166,129 @@ EOF_WRAPPER
   chmod +x "${BASE_DIR}/bin/openclaw"
 }
 
-ensure_gateway_auth_token() {
-  node -e "const fs=require('fs');const crypto=require('crypto');const JSON5=require('json5');const p=process.env.OPENCLAW_CONFIG_PATH;const raw=fs.readFileSync(p,'utf8');const data=JSON5.parse(raw);const gateway=data.gateway||{};const auth=gateway.auth||{};let updated=false;const token=String(auth.token||'').trim();if(!token){auth.token=crypto.randomBytes(24).toString('hex');auth.mode=auth.mode||'token';gateway.auth=auth;data.gateway=gateway;fs.writeFileSync(p, JSON.stringify(data,null,2)+'\\n');updated=true;}if(updated){console.log('updated');}else{console.log('unchanged');}" 2>/dev/null
+remove_openclaw_wrapper() {
+  rm -f "${BASE_DIR}/bin/openclaw"
 }
 
-needs_build="true"
+ensure_gateway_auth_token() {
+  local token
+  local tmp_file
 
-if [ ! -d "${REPO_DIR}/.git" ]; then
-  log "cloning repo ${REPO_URL} -> ${REPO_DIR}"
-  rm -rf "${REPO_DIR}"
-  if [ -n "${BRANCH}" ]; then
-    git clone --branch "${BRANCH}" "${REPO_URL}" "${REPO_DIR}"
-  else
-    git clone "${REPO_URL}" "${REPO_DIR}"
+  if [ ! -f "${OPENCLAW_CONFIG_PATH}" ]; then
+    echo "missing"
+    return 0
   fi
-else
-  log "updating repo in ${REPO_DIR}"
-  git -C "${REPO_DIR}" remote set-url origin "${REPO_URL}"
-  git -C "${REPO_DIR}" fetch --prune
-  current_head="$(git -C "${REPO_DIR}" rev-parse HEAD)"
-  if [ -n "${BRANCH}" ]; then
-    target_branch="${BRANCH}"
-  else
-    target_branch="$(git -C "${REPO_DIR}" remote show origin | sed -n '/HEAD branch/s/.*: //p')"
+
+  if jq -e '(.gateway.auth.token // "") | tostring | gsub("^\\s+|\\s+$"; "") | length > 0' "${OPENCLAW_CONFIG_PATH}" >/dev/null 2>&1; then
+    echo "unchanged"
+    return 0
   fi
-  if [ -z "${target_branch}" ]; then
-    log "failed to determine default branch"
+
+  token="$(node -e "const crypto=require('crypto');process.stdout.write(crypto.randomBytes(24).toString('hex'));")"
+  tmp_file="$(mktemp)"
+  if jq --arg token "${token}" '.gateway = (.gateway // {}) | .gateway.auth = (.gateway.auth // {}) | .gateway.auth.token = $token | .gateway.auth.mode = (.gateway.auth.mode // "token")' "${OPENCLAW_CONFIG_PATH}" > "${tmp_file}" 2>/dev/null; then
+    mv "${tmp_file}" "${OPENCLAW_CONFIG_PATH}"
+    echo "updated"
+  else
+    rm -f "${tmp_file}"
+    echo "invalid"
+  fi
+}
+
+if [ "${INSTALL_MODE}" = "source" ]; then
+  needs_build="true"
+
+  if [ -z "${REPO_URL}" ] || [ "${REPO_URL}" = "null" ]; then
+    log "repo_url is empty; set it in add-on options"
     exit 1
   fi
-  target_ref="origin/${target_branch}"
-  target_head="$(git -C "${REPO_DIR}" rev-parse "${target_ref}")"
-  if [ "${current_head}" = "${target_head}" ]; then
-    needs_build="false"
+
+  if [ -n "${TOKEN_OPT}" ] && [ "${TOKEN_OPT}" != "null" ]; then
+    REPO_URL="https://${TOKEN_OPT}@${REPO_URL#https://}"
   fi
-  git -C "${REPO_DIR}" checkout "${target_branch}"
-  git -C "${REPO_DIR}" reset --hard "${target_ref}"
-  git -C "${REPO_DIR}" clean -fd
-fi
 
-cd "${REPO_DIR}"
+  if [ -n "${BRANCH}" ]; then
+    log "branch=${BRANCH}"
+  fi
 
-require_openclaw_repo
-ensure_openclaw_wrapper
+  if [ ! -d "${REPO_DIR}/.git" ]; then
+    log "cloning repo ${REPO_URL} -> ${REPO_DIR}"
+    rm -rf "${REPO_DIR}"
+    if [ -n "${BRANCH}" ]; then
+      git clone --branch "${BRANCH}" "${REPO_URL}" "${REPO_DIR}"
+    else
+      git clone "${REPO_URL}" "${REPO_DIR}"
+    fi
+  else
+    log "updating repo in ${REPO_DIR}"
+    git -C "${REPO_DIR}" remote set-url origin "${REPO_URL}"
+    git -C "${REPO_DIR}" fetch --prune
+    current_head="$(git -C "${REPO_DIR}" rev-parse HEAD)"
+    if [ -n "${BRANCH}" ]; then
+      target_branch="${BRANCH}"
+    else
+      target_branch="$(git -C "${REPO_DIR}" remote show origin | sed -n '/HEAD branch/s/.*: //p')"
+    fi
+    if [ -z "${target_branch}" ]; then
+      log "failed to determine default branch"
+      exit 1
+    fi
+    target_ref="origin/${target_branch}"
+    target_head="$(git -C "${REPO_DIR}" rev-parse "${target_ref}")"
+    if [ "${current_head}" = "${target_head}" ]; then
+      needs_build="false"
+    fi
+    git -C "${REPO_DIR}" checkout "${target_branch}"
+    git -C "${REPO_DIR}" reset --hard "${target_ref}"
+    git -C "${REPO_DIR}" clean -fd
+  fi
 
-if [ ! -d "${REPO_DIR}/node_modules" ]; then
-  needs_build="true"
-fi
+  cd "${REPO_DIR}"
 
-needs_ui_build="${needs_build}"
-if [ ! -d "${REPO_DIR}/ui/node_modules" ]; then
-  needs_ui_build="true"
-fi
+  require_openclaw_repo
+  ensure_openclaw_wrapper
 
-if [ "${needs_build}" = "true" ] || [ "${needs_ui_build}" = "true" ]; then
-  pnpm config set confirmModulesPurge false >/dev/null 2>&1 || true
-  pnpm config set global-bin-dir "${PNPM_HOME}" >/dev/null 2>&1 || true
-  pnpm config set global-dir "${BASE_DIR}/.local/share/pnpm/global" >/dev/null 2>&1 || true
-fi
+  if [ ! -d "${REPO_DIR}/node_modules" ]; then
+    needs_build="true"
+  fi
 
-if [ "${needs_build}" = "true" ]; then
-  log "installing dependencies"
-  pnpm install --no-frozen-lockfile --prefer-frozen-lockfile --prod=false
-  log "building gateway"
-  pnpm build
-else
-  log "repo unchanged; skipping dependency install/build"
-fi
-
-if [ "${needs_ui_build}" = "true" ]; then
+  needs_ui_build="${needs_build}"
   if [ ! -d "${REPO_DIR}/ui/node_modules" ]; then
-    log "installing UI dependencies"
-    pnpm ui:install
+    needs_ui_build="true"
   fi
-  log "building control UI"
-  pnpm ui:build
+
+  if [ "${needs_build}" = "true" ] || [ "${needs_ui_build}" = "true" ]; then
+    pnpm config set confirmModulesPurge false >/dev/null 2>&1 || true
+    pnpm config set global-bin-dir "${PNPM_HOME}" >/dev/null 2>&1 || true
+    pnpm config set global-dir "${BASE_DIR}/.local/share/pnpm/global" >/dev/null 2>&1 || true
+  fi
+
+  if [ "${needs_build}" = "true" ]; then
+    log "installing dependencies"
+    pnpm install --no-frozen-lockfile --prefer-frozen-lockfile --prod=false
+    log "building gateway"
+    pnpm build
+  else
+    log "repo unchanged; skipping dependency install/build"
+  fi
+
+  if [ "${needs_ui_build}" = "true" ]; then
+    if [ ! -d "${REPO_DIR}/ui/node_modules" ]; then
+      log "installing UI dependencies"
+      pnpm ui:install
+    fi
+    log "building control UI"
+    pnpm ui:build
+  else
+    log "repo unchanged; skipping UI build"
+  fi
 else
-  log "repo unchanged; skipping UI build"
+  remove_openclaw_wrapper
+  if ! command -v openclaw >/dev/null 2>&1; then
+    log "openclaw CLI not found in image; cannot continue"
+    exit 1
+  fi
+  log "using preinstalled OpenClaw package from image"
 fi
 
 if [ ! -f "${OPENCLAW_CONFIG_PATH}" ]; then
@@ -259,6 +303,8 @@ if [ -f "${OPENCLAW_CONFIG_PATH}" ]; then
     log "gateway.auth.token set (missing)"
   elif [ "${auth_status}" = "unchanged" ]; then
     log "gateway.auth.token already set"
+  elif [ "${auth_status}" = "missing" ]; then
+    log "config missing; token bootstrap skipped"
   else
     log "failed to normalize gateway.auth.token (invalid config?)"
   fi
@@ -273,6 +319,9 @@ fi
 ALLOW_UNCONFIGURED=()
 if [ ! -f "${OPENCLAW_CONFIG_PATH}" ]; then
   log "config missing; allowing unconfigured gateway start"
+  ALLOW_UNCONFIGURED=(--allow-unconfigured)
+elif ! jq -e '(.gateway.mode // "") | tostring | gsub("^\\s+|\\s+$"; "") | length > 0' "${OPENCLAW_CONFIG_PATH}" >/dev/null 2>&1; then
+  log "gateway.mode missing; allowing unconfigured gateway start"
   ALLOW_UNCONFIGURED=(--allow-unconfigured)
 fi
 

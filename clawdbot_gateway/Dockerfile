@@ -1,5 +1,13 @@
 FROM node:24-bookworm-slim
 
+ARG BUILD_ARCH
+ARG BUILD_VERSION
+ARG OPENCLAW_VERSION=2026.3.2
+
+LABEL io.hass.type="addon" \
+  io.hass.arch="${BUILD_ARCH}" \
+  io.hass.version="${BUILD_VERSION}"
+
 # Use bash with pipefail so curl|tar failures stop the build.
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -37,7 +45,7 @@ ENV PATH="${BUN_INSTALL}/bin:${PNPM_HOME}:${PATH}"
 
 RUN curl -fsSL https://bun.sh/install | bash
 
-RUN npm install -g pnpm \
+RUN npm install -g pnpm openclaw@${OPENCLAW_VERSION} \
   && mkdir -p /pnpm \
   && pnpm config set global-bin-dir /pnpm \
   && pnpm add -g clawdhub

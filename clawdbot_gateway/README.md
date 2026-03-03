@@ -18,6 +18,8 @@ Run [OpenClaw](https://github.com/openclaw/openclaw) on Home Assistant OS with s
 
 After connecting, run `openclaw configure` to finish setup (including gateway mode and auth token).
 
+By default the add-on uses preinstalled OpenClaw package mode (`install_mode=package`) to avoid source builds on low-memory devices.
+
 ## Links
 
 - [Documentation](https://docs.clawd.bot)

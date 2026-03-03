@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.18
+- Runtime: add `install_mode` with default `package` to skip git clone/build at startup.
+- Runtime: keep source clone/build as opt-in via `install_mode=source`.
+- Distribution: configure add-on to pull per-arch GHCR images via `image`.
+- Docker: preinstall OpenClaw npm package in the image.
+
 ## 0.2.17
 - Runtime: remove SIGUSR1 relay and custom restart loop.
 - Logs: drop add-on log formatting options and rely on gateway stdout.

@@ -24,11 +24,12 @@ OpenClaw Gateway for HA OS with SSH tunnel support for remote connections.
 
 | Option | Description |
 |--------|-------------|
+| `install_mode` | `package` (default, no build) or `source` (clone + build from repo) |
 | `port` | Gateway WebSocket port (default: 18789) |
 | `verbose` | Enable verbose logging |
-| `repo_url` | OpenClaw source repository |
-| `branch` | Branch to checkout (optional, uses repo's default if omitted) |
-| `github_token` | GitHub token for private repos |
+| `repo_url` | OpenClaw source repository (source mode only) |
+| `branch` | Branch to checkout (optional, source mode only) |
+| `github_token` | GitHub token for private repos (source mode only) |
 | `ssh_port` | SSH server port for tunnel access (default: 2222) |
 | `ssh_authorized_keys` | Public keys for SSH access |
 
