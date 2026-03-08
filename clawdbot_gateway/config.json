@@ -6,7 +6,7 @@
   "url": "https://github.com/openclaw/openclaw",
   "documentation": "https://docs.openclaw.ai",
   "arch": ["aarch64", "amd64"],
-  "image": "ghcr.io/ngutman/{arch}-clawdbot-gateway",
+  "image": "ghcr.io/maxyo/{arch}-clawdbot-gateway",
   "startup": "services",
   "boot": "auto",
   "host_network": true,
