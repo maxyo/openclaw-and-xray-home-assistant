@@ -1,5 +1,5 @@
 name: OpenClaw Assistant
-version: "0.5.58"
+version: "0.5.59"
 slug: openclaw_assistant
 description: Run OpenClaw Assistant (OpenClaw-compatible) as a Home Assistant add-on.
 url: https://github.com/techartdev/OpenClawHomeAssistant
@@ -41,8 +41,9 @@ options:
   # Optional: Home Assistant long-lived token (for local HA API scripts/tools)
   homeassistant_token: ""
 
-  # Optional: outbound HTTP/HTTPS proxy for OpenClaw network access.
-  # Example: "http://192.168.2.1:3128"
+  # Optional: outbound proxy for OpenClaw network access.
+  # Supports direct HTTP URL (example: "http://192.168.2.1:3128")
+  # or VLESS share link (example: "vless://...") which is auto-bridged via sing-box.
   http_proxy: ""
 
   # Optional: Router SSH defaults (leave empty if you don't need router automation)

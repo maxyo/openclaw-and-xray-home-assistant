@@ -5,11 +5,15 @@ All notable changes to the OpenClaw Assistant Home Assistant Add-on will be docu
 ## [Unreleased]
 
 ### Added
+- Built-in VLESS bridge support in `http_proxy`: when `http_proxy` starts with `vless://`, the add-on now starts an internal `sing-box` mixed proxy and routes outbound HTTP/HTTPS traffic through it.
+- New runtime helper `vless_to_singbox.py` to generate validated `sing-box` config from VLESS share links.
+- Added `sing-box` binary to the add-on image for local VLESS bridging.
 - New add-on option `controlui_disable_device_auth` (default: `true`) to control whether `gateway.controlUi.dangerouslyDisableDeviceAuth` is enabled in `lan_https` mode.
 
 ### Changed
 - `set-control-ui-origins` helper now accepts an explicit device-auth toggle and applies `dangerouslyDisableDeviceAuth` accordingly instead of forcing it on.
 - `run.sh` now forwards the add-on option to the config helper.
+- `run.sh` now auto-detects `http_proxy=vless://...`, starts a local VLESS bridge (`sing-box`), and then exports standard `HTTP_PROXY` / `HTTPS_PROXY` env vars to OpenClaw.
 - Control UI guidance text and docs were updated to explain when device-pairing bypass should be ON vs OFF.
 
 ### Translations
@@ -17,6 +21,7 @@ All notable changes to the OpenClaw Assistant Home Assistant Add-on will be docu
 
 ### Fixed
 - Docker build stability: replaced NodeSource `setup_22.x | bash` installer with explicit keyring + apt source configuration for Node.js 22, avoiding intermittent `apt-get install nodejs` exit code 100 failures.
+- VLESS parsing now supports base64-style share links used by some providers (for example `vless://<base64(auto:uuid@host:port)>?...`) in addition to standard `vless://uuid@host:port?...` format.
 
 ## [0.5.54] - 2026-02-25
 

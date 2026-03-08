@@ -294,7 +294,7 @@ When `gateway_auth_mode: trusted-proxy` is used, the add-on sets `gateway.auth.t
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `homeassistant_token` | string | _(empty)_ | Optional HA long-lived access token (use at own risk, can be very unsecure but very powerful). Saved to `/config/secrets/homeassistant.token` for use by scripts/skills |
-| `http_proxy` | string | _(empty)_ | Optional outbound proxy URL for HTTP/HTTPS requests from OpenClaw and Node tools. Example: `http://192.168.2.1:3128` |
+| `http_proxy` | string | _(empty)_ | Optional outbound proxy setting. Supports `http://host:port` / `https://host:port` directly, or `vless://...` share links (auto-bridged through built-in sing-box to local HTTP proxy). |
 
 ### Router SSH
 
@@ -857,10 +857,15 @@ If Telegram is configured but polling fails with network fetch errors:
 **Symptom**: External API/network calls still fail in restricted networks even after setting proxy.
 
 **Checks**:
-1. Set add-on option `http_proxy` with full URL format: `http://host:port` (example: `http://192.168.2.1:3128`).
+1. Set add-on option `http_proxy` either as:
+   - direct HTTP proxy URL: `http://host:port` (example: `http://192.168.2.1:3128`), or
+   - VLESS share link: `vless://...` (the add-on auto-starts local sing-box bridge).
 2. Restart the add-on after changing configuration.
-3. Check logs for `INFO: Outbound HTTP/HTTPS proxy enabled from add-on configuration.`
-4. If you see `WARN: Invalid http_proxy value`, fix the URL format and restart.
+3. Check logs for one of these messages:
+   - `INFO: Outbound HTTP/HTTPS proxy enabled from add-on configuration.`
+   - `INFO: VLESS proxy bridge enabled (http_proxy -> http://127.0.0.1:17890)`
+4. If you see `WARN: Invalid http_proxy value`, fix the format and restart.
+5. For VLESS errors, inspect `/config/.openclaw/proxy/sing-box.check.log` and `/config/.openclaw/proxy/sing-box.log`.
 
 When proxy is enabled, add-on startup also applies default bypass ranges via `NO_PROXY`/`no_proxy` for localhost and private network ranges.
 

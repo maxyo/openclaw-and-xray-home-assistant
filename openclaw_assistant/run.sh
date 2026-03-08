@@ -21,6 +21,13 @@ TZNAME=$(jq -r '.timezone // "Europe/Sofia"' "$OPTIONS_FILE")
 GW_PUBLIC_URL=$(jq -r '.gateway_public_url // empty' "$OPTIONS_FILE")
 HA_TOKEN=$(jq -r '.homeassistant_token // empty' "$OPTIONS_FILE")
 ADDON_HTTP_PROXY=$(jq -r '.http_proxy // empty' "$OPTIONS_FILE")
+# Internal VLESS->HTTP proxy bridge state (enabled when http_proxy starts with vless://)
+SINGBOX_PID=""
+SINGBOX_PROXY_PORT="17890"
+SINGBOX_STATE_DIR="/config/.openclaw/proxy"
+SINGBOX_CONFIG_PATH="${SINGBOX_STATE_DIR}/sing-box.json"
+SINGBOX_LOG_PATH="${SINGBOX_STATE_DIR}/sing-box.log"
+SINGBOX_CHECK_LOG_PATH="${SINGBOX_STATE_DIR}/sing-box.check.log"
 ENABLE_TERMINAL=$(jq -r '.enable_terminal // true' "$OPTIONS_FILE")
 TERMINAL_PORT_RAW=$(jq -r '.terminal_port // 7681' "$OPTIONS_FILE")
 
@@ -106,7 +113,72 @@ esac
 # Reduce risk of secrets ending up in logs
 set +x
 
+cleanup_outbound_proxy() {
+  if [ -n "${SINGBOX_PID:-}" ] && kill -0 "${SINGBOX_PID}" >/dev/null 2>&1; then
+    echo "INFO: Stopping sing-box proxy bridge (PID ${SINGBOX_PID})"
+    kill -TERM "${SINGBOX_PID}" >/dev/null 2>&1 || true
+    wait "${SINGBOX_PID}" >/dev/null 2>&1 || true
+  fi
+}
+
+start_vless_http_proxy_bridge() {
+  local vless_uri="$1"
+  local ready="false"
+
+  if ! command -v sing-box >/dev/null 2>&1; then
+    echo "ERROR: http_proxy is VLESS URI but sing-box is not installed in the add-on image"
+    return 1
+  fi
+
+  mkdir -p "${SINGBOX_STATE_DIR}"
+
+  if ! python3 /usr/local/lib/vless_to_singbox.py --vless-uri "$vless_uri" --listen-port "$SINGBOX_PROXY_PORT" > "$SINGBOX_CONFIG_PATH"; then
+    echo "ERROR: failed to build sing-box config from VLESS URI"
+    return 1
+  fi
+
+  if ! sing-box check -c "$SINGBOX_CONFIG_PATH" >"$SINGBOX_CHECK_LOG_PATH" 2>&1; then
+    echo "ERROR: generated sing-box config is invalid"
+    sed -n '1,120p' "$SINGBOX_CHECK_LOG_PATH" || true
+    return 1
+  fi
+
+  echo "INFO: Starting sing-box VLESS bridge on 127.0.0.1:${SINGBOX_PROXY_PORT}"
+  sing-box run -c "$SINGBOX_CONFIG_PATH" >"$SINGBOX_LOG_PATH" 2>&1 &
+  SINGBOX_PID="$!"
+
+  for _ in $(seq 1 50); do
+    if ! kill -0 "${SINGBOX_PID}" >/dev/null 2>&1; then
+      break
+    fi
+    if (echo >"/dev/tcp/127.0.0.1/${SINGBOX_PROXY_PORT}") >/dev/null 2>&1; then
+      ready="true"
+      break
+    fi
+    sleep 0.1
+  done
+
+  if [ "$ready" != "true" ]; then
+    echo "ERROR: sing-box proxy bridge failed to become ready"
+    sed -n '1,120p' "$SINGBOX_LOG_PATH" || true
+    return 1
+  fi
+
+  ADDON_HTTP_PROXY="http://127.0.0.1:${SINGBOX_PROXY_PORT}"
+  echo "INFO: VLESS proxy bridge enabled (http_proxy -> ${ADDON_HTTP_PROXY})"
+  return 0
+}
+
+trap cleanup_outbound_proxy EXIT
+
 # Optional outbound proxy from add-on settings.
+# Supports either HTTP(S) proxy URL or VLESS URI (auto-bridged through sing-box).
+if [ -n "$ADDON_HTTP_PROXY" ] && [[ "$ADDON_HTTP_PROXY" =~ ^vless:// ]]; then
+  if ! start_vless_http_proxy_bridge "$ADDON_HTTP_PROXY"; then
+    exit 1
+  fi
+fi
+
 # If set, apply it to both HTTP and HTTPS for Node/undici/OpenClaw tooling.
 if [ -n "$ADDON_HTTP_PROXY" ]; then
   if [[ "$ADDON_HTTP_PROXY" =~ ^https?://[^[:space:]]+$ ]]; then
@@ -122,7 +194,7 @@ if [ -n "$ADDON_HTTP_PROXY" ]; then
     echo "INFO: Outbound HTTP/HTTPS proxy enabled from add-on configuration."
     echo "INFO: Applied NO_PROXY defaults for localhost/private network ranges."
   else
-    echo "WARN: Invalid http_proxy value in add-on options; expected URL like http://host:port"
+    echo "WARN: Invalid http_proxy value in add-on options; expected URL like http://host:port or vless://..."
   fi
 fi
 
@@ -475,6 +547,8 @@ shutdown() {
     kill -TERM "${GW_PID}" >/dev/null 2>&1 || true
     wait "${GW_PID}" || true
   fi
+
+  cleanup_outbound_proxy || true
 
   if [ "$CLEAN_LOCKS_ON_EXIT" = "true" ]; then
     cleanup_session_locks || true

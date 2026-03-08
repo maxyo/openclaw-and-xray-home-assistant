@@ -17,7 +17,7 @@ This repository contains a Home Assistant add-on that runs **OpenClaw** inside *
 - **Web Terminal** — browser-based terminal embedded in Home Assistant
 - **Assist Pipeline** — use OpenClaw as a conversation agent via the OpenAI-compatible API
 - **Browser Automation** — Chromium included for web scraping and automation skills
-- **Proxy Support** — optional outbound `http_proxy` setting for HTTP/HTTPS traffic
+- **Proxy Support** — optional outbound `http_proxy` setting for HTTP/HTTPS traffic, including direct `vless://` links (auto-bridged via built-in sing-box)
 - **Persistent Storage** — skills, config, and workspace survive add-on updates
 - **Bundled Tools** — git, vim, nano, bat, fd, ripgrep, curl, jq, python3, pnpm, Homebrew
 

@@ -58,6 +58,15 @@ RUN ARCH=$(echo ${TARGETARCH:-$(dpkg --print-architecture)} | sed 's|arm64|aarch
  && curl -fsSL "https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.${ARCH}" -o /usr/local/bin/ttyd \
  && chmod +x /usr/local/bin/ttyd
 
+# Install sing-box for optional VLESS outbound proxy mode.
+ARG SING_BOX_VERSION=1.13.2
+RUN ARCH=$(echo ${TARGETARCH:-$(dpkg --print-architecture)} | sed 's|arm64|arm64|;s|arm/v7|armv7|;s|armv7|armv7|;s|amd64|amd64|') \
+ && TMP_DIR="$(mktemp -d)" \
+ && curl -fsSL "https://github.com/SagerNet/sing-box/releases/download/v${SING_BOX_VERSION}/sing-box-${SING_BOX_VERSION}-linux-${ARCH}.tar.gz" \
+    | tar xz -C "${TMP_DIR}" \
+ && install -m 0755 "${TMP_DIR}/sing-box-${SING_BOX_VERSION}-linux-${ARCH}/sing-box" /usr/local/bin/sing-box \
+ && rm -rf "${TMP_DIR}"
+
 RUN node -v && npm -v
 
 # Install pnpm globally (required by some OpenClaw skills like clawhub)
@@ -139,9 +148,10 @@ COPY oc_config_helper.py /oc_config_helper.py
 COPY render_nginx.py /render_nginx.py
 COPY oc-cleanup.sh /usr/local/bin/oc-cleanup
 COPY openclaw-proxy-shim.cjs /usr/local/lib/openclaw-proxy-shim.cjs
+COPY vless_to_singbox.py /usr/local/lib/vless_to_singbox.py
 COPY nginx.conf.tpl /etc/nginx/nginx.conf.tpl
 COPY landing.html.tpl /etc/nginx/landing.html.tpl
-RUN chmod +x /run.sh /oc_config_helper.py /render_nginx.py /usr/local/bin/oc-cleanup \
+RUN chmod +x /run.sh /oc_config_helper.py /render_nginx.py /usr/local/bin/oc-cleanup /usr/local/lib/vless_to_singbox.py \
  && mkdir -p /run/nginx
 
 CMD [ "/run.sh" ]
