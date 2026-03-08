@@ -28,17 +28,22 @@ This add-on runs the OpenClaw Gateway on Home Assistant OS, providing secure rem
 | `repo_url` | OpenClaw source repository URL (used in `source` mode) |
 | `branch` | Branch to checkout (uses repo's default if omitted, `source` mode only) |
 | `github_token` | Token for private repository access (`source` mode only) |
+| `proxy_mode` | `off` (default) or `vless` to enable built-in outbound proxy |
+| `proxy_vless_uri` | VLESS URI for sing-box (`proxy_mode=vless`) |
+| `proxy_listen_port` | Local mixed proxy port inside add-on (default: `7890`) |
+| `proxy_no_proxy` | Extra comma-separated hosts to bypass proxy |
 | `verbose` | Enable verbose logging |
 
 ### First Run
 
 The add-on performs these steps on startup:
 
-1. If `install_mode=source`: clones/updates `/config/openclaw/openclaw-src` and builds when needed
-2. If `install_mode=package` (default): uses the preinstalled OpenClaw npm package (no source build)
-3. Runs `openclaw setup` if no config exists
-4. Ensures `gateway.auth.token` exists (if config exists but token missing)
-5. Starts the gateway
+1. If `proxy_mode=vless`: validates and starts built-in sing-box proxy, then exports `HTTP(S)_PROXY` env vars
+2. If `install_mode=source`: clones/updates `/config/openclaw/openclaw-src` and builds when needed
+3. If `install_mode=package` (default): uses the preinstalled OpenClaw npm package (no source build)
+4. Runs `openclaw setup` if no config exists
+5. Ensures `gateway.auth.token` exists (if config exists but token missing)
+6. Starts the gateway
 
 ### OpenClaw Configuration
 
@@ -62,6 +67,25 @@ The gateway auto-reloads config changes. Restart the add-on only if you change S
 ```bash
 ha addons restart <addon-slug>
 ```
+
+### Built-in outbound VLESS proxy
+
+Set these options to route outbound OpenClaw/OpenAI traffic through VLESS without cross-container networking tweaks:
+
+- `proxy_mode: vless`
+- `proxy_vless_uri: vless://...`
+- optional `proxy_listen_port` (default `7890`)
+- optional `proxy_no_proxy` for additional bypass hosts
+
+When enabled, the add-on starts sing-box and exports:
+
+- `HTTP_PROXY=http://127.0.0.1:<proxy_listen_port>`
+- `HTTPS_PROXY=http://127.0.0.1:<proxy_listen_port>`
+- `NO_PROXY=127.0.0.1,localhost,homeassistant,hassio,supervisor[,proxy_no_proxy...]`
+
+If startup fails, check add-on logs and `sing-box` logs under:
+
+- `/config/openclaw/.openclaw/proxy/sing-box.log`
 
 ## Usage
 

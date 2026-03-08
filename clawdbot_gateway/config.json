@@ -1,6 +1,6 @@
 {
   "name": "OpenClaw Gateway",
-  "version": "0.2.18",
+  "version": "0.2.19",
   "slug": "clawdbot_gateway",
   "description": "OpenClaw Gateway (SSH-tunneled, HA add-on)",
   "url": "https://github.com/openclaw/openclaw",
@@ -24,6 +24,10 @@
     "repo_url": "https://github.com/openclaw/openclaw.git",
     "branch": "",
     "github_token": "",
+    "proxy_mode": "off",
+    "proxy_vless_uri": "",
+    "proxy_listen_port": 7890,
+    "proxy_no_proxy": "",
     "ssh_port": 2222,
     "ssh_authorized_keys": ""
   },
@@ -34,6 +38,10 @@
     "repo_url": "str",
     "branch": "str?",
     "github_token": "password?",
+    "proxy_mode": "list(off|vless)",
+    "proxy_vless_uri": "password?",
+    "proxy_listen_port": "int(1024,65535)",
+    "proxy_no_proxy": "str?",
     "ssh_port": "int(1,65535)",
     "ssh_authorized_keys": "str?"
   }

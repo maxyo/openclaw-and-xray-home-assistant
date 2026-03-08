@@ -6,6 +6,7 @@ Run [OpenClaw](https://github.com/openclaw/openclaw) on Home Assistant OS with s
 
 - 🦞 **OpenClaw Gateway** — AI agent with messaging, automation, and more
 - 🔒 **SSH Tunnel** — Secure remote access for the OpenClaw app or CLI
+- 🌐 **Optional VLESS Proxy** — Route outbound OpenAI/OpenClaw traffic through built-in sing-box
 - 📦 **Persistent Storage** — All data survives add-on updates
 - 🛠️ **Included Tools** — gog (Google Workspace), gh (GitHub), hass-cli
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.19
+- Proxy: add optional built-in sing-box VLESS client (`proxy_mode=vless`) for outbound traffic.
+- Runtime: export `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` automatically when proxy is enabled.
+- Config: add `proxy_vless_uri`, `proxy_listen_port`, and `proxy_no_proxy` options.
+- Docs: document VLESS proxy setup and troubleshooting path for sing-box logs.
+
 ## 0.2.18
 - Runtime: add `install_mode` with default `package` to skip git clone/build at startup.
 - Runtime: keep source clone/build as opt-in via `install_mode=source`.

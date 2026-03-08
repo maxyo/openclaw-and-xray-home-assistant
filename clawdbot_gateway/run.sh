@@ -5,7 +5,7 @@ log() {
   printf "[addon] %s\n" "$*"
 }
 
-log "run.sh version=2026-03-03-package-default"
+log "run.sh version=2026-03-08-vless-proxy"
 
 BASE_DIR=/config/openclaw
 STATE_DIR="${BASE_DIR}/.openclaw"
@@ -14,6 +14,10 @@ REPO_DIR="${BASE_DIR}/openclaw-src"
 WORKSPACE_DIR="${BASE_DIR}/workspace"
 SSH_AUTH_DIR="${BASE_DIR}/.ssh"
 PNPM_HOME="${BASE_DIR}/.local/share/pnpm"
+PROXY_DIR="${STATE_DIR}/proxy"
+PROXY_CONFIG_PATH="${PROXY_DIR}/sing-box.json"
+PROXY_LOG_PATH="${PROXY_DIR}/sing-box.log"
+SINGBOX_PID=""
 
 if [ -x /migrate.sh ]; then
   /migrate.sh
@@ -66,6 +70,125 @@ if [ -n "\${SSH_CONNECTION:-}" ]; then
 fi
 EOF
 
+cleanup() {
+  if [ -n "${SINGBOX_PID:-}" ] && kill -0 "${SINGBOX_PID}" 2>/dev/null; then
+    log "stopping sing-box (pid=${SINGBOX_PID})"
+    kill "${SINGBOX_PID}" 2>/dev/null || true
+  fi
+}
+
+trap cleanup EXIT
+
+proxy_no_proxy_value() {
+  local extra="${1:-}"
+  local base="127.0.0.1,localhost,homeassistant,hassio,supervisor"
+  if [ -n "${extra}" ] && [ "${extra}" != "null" ]; then
+    printf "%s,%s" "${base}" "${extra}"
+  else
+    printf "%s" "${base}"
+  fi
+}
+
+start_outbound_proxy() {
+  local mode
+  local vless_uri
+  local listen_port
+  local extra_no_proxy
+  local ready=0
+
+  mode="$(jq -r '.proxy_mode // "off"' /data/options.json 2>/dev/null || true)"
+  if [ -z "${mode}" ] || [ "${mode}" = "null" ]; then
+    mode="off"
+  fi
+
+  case "${mode}" in
+    off|vless)
+      ;;
+    *)
+      log "invalid proxy_mode=${mode}; falling back to off"
+      mode="off"
+      ;;
+  esac
+
+  if [ "${mode}" = "off" ]; then
+    log "outbound proxy disabled"
+    return 0
+  fi
+
+  if ! command -v sing-box >/dev/null 2>&1; then
+    log "proxy_mode=${mode} but sing-box binary is missing"
+    exit 1
+  fi
+
+  vless_uri="$(jq -r '.proxy_vless_uri // ""' /data/options.json 2>/dev/null || true)"
+  listen_port="$(jq -r '.proxy_listen_port // 7890' /data/options.json 2>/dev/null || true)"
+  extra_no_proxy="$(jq -r '.proxy_no_proxy // ""' /data/options.json 2>/dev/null || true)"
+
+  if [ -z "${listen_port}" ] || [ "${listen_port}" = "null" ]; then
+    listen_port="7890"
+  fi
+
+  case "${listen_port}" in
+    ''|*[!0-9]*)
+      log "invalid proxy_listen_port=${listen_port}; expected integer"
+      exit 1
+      ;;
+  esac
+
+  mkdir -p "${PROXY_DIR}"
+
+  if [ "${mode}" = "vless" ]; then
+    if [ -z "${vless_uri}" ] || [ "${vless_uri}" = "null" ]; then
+      log "proxy_mode=vless requires proxy_vless_uri"
+      exit 1
+    fi
+
+    if ! /opt/openclaw/vless_to_singbox.py --vless-uri "${vless_uri}" --listen-port "${listen_port}" > "${PROXY_CONFIG_PATH}"; then
+      log "failed to build sing-box config from proxy_vless_uri"
+      exit 1
+    fi
+  fi
+
+  if ! sing-box check -c "${PROXY_CONFIG_PATH}" >"${PROXY_DIR}/sing-box.check.log" 2>&1; then
+    log "sing-box config validation failed"
+    sed -n '1,80p' "${PROXY_DIR}/sing-box.check.log" || true
+    exit 1
+  fi
+
+  log "starting outbound proxy (mode=${mode}, listen=127.0.0.1:${listen_port})"
+  sing-box run -c "${PROXY_CONFIG_PATH}" >"${PROXY_LOG_PATH}" 2>&1 &
+  SINGBOX_PID="$!"
+
+  for _ in $(seq 1 50); do
+    if ! kill -0 "${SINGBOX_PID}" 2>/dev/null; then
+      break
+    fi
+    if (echo >"/dev/tcp/127.0.0.1/${listen_port}") >/dev/null 2>&1; then
+      ready=1
+      break
+    fi
+    sleep 0.1
+  done
+
+  if [ "${ready}" != "1" ]; then
+    log "sing-box failed to become ready"
+    sed -n '1,120p' "${PROXY_LOG_PATH}" || true
+    exit 1
+  fi
+
+  export HTTP_PROXY="http://127.0.0.1:${listen_port}"
+  export HTTPS_PROXY="${HTTP_PROXY}"
+  export ALL_PROXY="socks5://127.0.0.1:${listen_port}"
+  export NO_PROXY="$(proxy_no_proxy_value "${extra_no_proxy}")"
+
+  export http_proxy="${HTTP_PROXY}"
+  export https_proxy="${HTTPS_PROXY}"
+  export all_proxy="${ALL_PROXY}"
+  export no_proxy="${NO_PROXY}"
+
+  log "proxy environment set (NO_PROXY=${NO_PROXY})"
+}
+
 auth_from_opts() {
   local val
   val="$(jq -r .ssh_authorized_keys /data/options.json 2>/dev/null || true)"
@@ -91,6 +214,8 @@ log "install_mode=${INSTALL_MODE}"
 REPO_URL="$(jq -r '.repo_url // empty' /data/options.json 2>/dev/null || true)"
 BRANCH="$(jq -r '.branch // ""' /data/options.json 2>/dev/null || true)"
 TOKEN_OPT="$(jq -r '.github_token // ""' /data/options.json 2>/dev/null || true)"
+
+start_outbound_proxy
 
 SSH_PORT="$(jq -r .ssh_port /data/options.json 2>/dev/null || true)"
 SSH_KEYS="$(auth_from_opts || true)"

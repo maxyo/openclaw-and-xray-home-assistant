@@ -59,10 +59,20 @@ RUN ARCH=$(echo ${TARGETARCH:-$(uname -m)} | sed 's/aarch64/arm64/;s/x86_64/amd6
      | tar xz -C /usr/local/bin gog \
   && chmod +x /usr/local/bin/gog
 
+# Install sing-box for optional outbound VLESS proxying.
+ARG SING_BOX_VERSION=1.13.2
+RUN ARCH=$(echo ${TARGETARCH:-$(uname -m)} | sed 's/aarch64/arm64/;s/x86_64/amd64/') \
+  && TMP_DIR="$(mktemp -d)" \
+  && curl -fsSL "https://github.com/SagerNet/sing-box/releases/download/v${SING_BOX_VERSION}/sing-box-${SING_BOX_VERSION}-linux-${ARCH}.tar.gz" \
+     | tar xz -C "${TMP_DIR}" \
+  && install -m 0755 "${TMP_DIR}/sing-box-${SING_BOX_VERSION}-linux-${ARCH}/sing-box" /usr/local/bin/sing-box \
+  && rm -rf "${TMP_DIR}"
+
 WORKDIR /opt/openclaw
 
 COPY run.sh /run.sh
 COPY migrate.sh /migrate.sh
-RUN chmod +x /run.sh /migrate.sh
+COPY vless_to_singbox.py /opt/openclaw/vless_to_singbox.py
+RUN chmod +x /run.sh /migrate.sh /opt/openclaw/vless_to_singbox.py
 
 CMD [ "/run.sh" ]
