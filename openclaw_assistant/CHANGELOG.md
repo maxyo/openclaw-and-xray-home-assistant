@@ -2,6 +2,11 @@
 
 All notable changes to the OpenClaw Assistant Home Assistant Add-on will be documented in this file.
 
+## [0.5.73] - 2026-05-03
+
+### Fixed
+- VLESS gRPC service names are now normalized when generating `sing-box` config, preventing accidental spaces or line wraps in copied links from producing a wrong `service_name` and `502 Bad Gateway` proxy responses.
+
 ## [0.5.72] - 2026-05-03
 
 ### Fixed

@@ -35,6 +35,10 @@ def _split_csv(value: str) -> list[str]:
     return [part.strip() for part in value.split(",") if part.strip()]
 
 
+def _remove_ascii_whitespace(value: str) -> str:
+    return "".join(str(value).split())
+
+
 def _b64_decode(value: str) -> str:
     raw = value.strip()
     padding = "=" * ((4 - len(raw) % 4) % 4)
@@ -227,7 +231,7 @@ def build_vless_outbound(uri: str) -> dict[str, Any]:
             transport_config["type"] = "grpc"
             service_name = _last(query, "serviceName") or _last(query, "service_name")
             if service_name:
-                transport_config["service_name"] = service_name
+                transport_config["service_name"] = _remove_ascii_whitespace(service_name)
         elif transport == "http":
             transport_config["type"] = "http"
             host_header = _last(query, "host")
