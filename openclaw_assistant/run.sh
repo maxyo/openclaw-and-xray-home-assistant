@@ -991,6 +991,34 @@ find_gateway_daemon_pid() {
   return 1
 }
 
+gateway_internal_port_ready() {
+  if command -v ss >/dev/null 2>&1; then
+    ss -H -tln 2>/dev/null | grep -q ":${GATEWAY_INTERNAL_PORT} "
+    return
+  fi
+
+  (: <"/dev/tcp/127.0.0.1/${GATEWAY_INTERNAL_PORT}") >/dev/null 2>&1
+}
+
+wait_for_https_gateway_upstream() {
+  if [ "$ENABLE_HTTPS_PROXY" != "true" ] || [ "$GATEWAY_MODE" = "remote" ]; then
+    return 0
+  fi
+
+  echo "INFO: Waiting for OpenClaw gateway upstream on 127.0.0.1:${GATEWAY_INTERNAL_PORT} before starting HTTPS proxy..."
+  for _ in $(seq 1 30); do
+    if gateway_internal_port_ready; then
+      echo "INFO: OpenClaw gateway upstream is ready on 127.0.0.1:${GATEWAY_INTERNAL_PORT}"
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "WARN: OpenClaw gateway upstream did not become ready within 30s; starting nginx anyway."
+  echo "WARN: Direct LAN gateway access may return 502 until the gateway finishes startup."
+  return 0
+}
+
 if ! start_openclaw_runtime; then
   exit 1
 fi
@@ -1118,6 +1146,8 @@ print(json.load(open(p)).get('gateway',{}).get('auth',{}).get('token',''), end='
 
 # Initial render (token may be absent if openclaw.json does not exist yet)
 render_landing startup
+
+wait_for_https_gateway_upstream
 
 echo "Starting ingress proxy (nginx) on :48099 ..."
 nginx -g 'daemon off;' &

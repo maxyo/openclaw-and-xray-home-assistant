@@ -2,6 +2,11 @@
 
 All notable changes to the OpenClaw Assistant Home Assistant Add-on will be documented in this file.
 
+## [0.5.74] - 2026-05-03
+
+### Fixed
+- In `lan_https` mode, nginx now waits briefly for the internal OpenClaw gateway upstream before accepting LAN gateway traffic, reducing startup-only `502 Bad Gateway` responses caused by nginx reaching `127.0.0.1:GATEWAY_PORT+1` before the gateway has bound the port.
+
 ## [0.5.73] - 2026-05-03
 
 ### Fixed
