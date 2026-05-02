@@ -2,7 +2,7 @@
 
 All notable changes to the OpenClaw Assistant Home Assistant Add-on will be documented in this file.
 
-## [Unreleased]
+## [0.5.71] - 2026-05-03
 
 ### Added
 - Built-in VLESS bridge support in `http_proxy`: when `http_proxy` starts with `vless://`, the add-on starts an internal `sing-box` mixed proxy and routes outbound HTTP/HTTPS traffic through it.
@@ -22,6 +22,7 @@ All notable changes to the OpenClaw Assistant Home Assistant Add-on will be docu
 ### Fixed
 - Docker build stability: replaced NodeSource `setup_22.x | bash` installer with explicit keyring + apt source configuration for Node.js 22, avoiding intermittent `apt-get install nodejs` exit code 100 failures.
 - VLESS parsing now supports base64-style share links used by some providers (for example `vless://<base64(auto:uuid@host:port)>?...`) in addition to standard `vless://uuid@host:port?...` format.
+- VLESS Reality public keys are now normalized before generating `sing-box` config, accepting both base64url and standard base64 formats and preventing `decode public_key: illegal base64 data` startup failures.
 
 ## [0.5.70] - 2026-04-30
 

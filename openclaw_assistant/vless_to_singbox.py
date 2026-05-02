@@ -41,6 +41,24 @@ def _b64_decode(value: str) -> str:
     return base64.urlsafe_b64decode(raw + padding).decode("utf-8", errors="strict")
 
 
+def _normalize_reality_public_key(value: str) -> str:
+    """Return sing-box-compatible unpadded base64url Reality public key."""
+    raw = "".join(unquote(value).split())
+    if not raw:
+        raise ValueError("security=reality requires pbk/publicKey")
+
+    padding = "=" * ((4 - len(raw) % 4) % 4)
+    try:
+        decoded = base64.b64decode((raw + padding).encode("ascii"), altchars=b"-_", validate=True)
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError("security=reality public key is not valid base64/base64url") from exc
+
+    if len(decoded) != 32:
+        raise ValueError("security=reality public key must decode to 32 bytes")
+
+    return base64.urlsafe_b64encode(decoded).decode("ascii").rstrip("=")
+
+
 def _parse_host_port(raw: str) -> tuple[str, int]:
     value = raw.strip()
     if not value:
@@ -184,7 +202,7 @@ def build_vless_outbound(uri: str) -> dict[str, Any]:
             short_id = _last(query, "sid") or _last(query, "shortId")
             if not public_key:
                 raise ValueError("security=reality requires pbk/publicKey")
-            reality["public_key"] = public_key
+            reality["public_key"] = _normalize_reality_public_key(public_key)
             if short_id:
                 reality["short_id"] = short_id
             tls["reality"] = reality
