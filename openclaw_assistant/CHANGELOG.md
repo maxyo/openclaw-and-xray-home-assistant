@@ -23,6 +23,20 @@ All notable changes to the OpenClaw Assistant Home Assistant Add-on will be docu
 - Docker build stability: replaced NodeSource `setup_22.x | bash` installer with explicit keyring + apt source configuration for Node.js 22, avoiding intermittent `apt-get install nodejs` exit code 100 failures.
 - VLESS parsing now supports base64-style share links used by some providers (for example `vless://<base64(auto:uuid@host:port)>?...`) in addition to standard `vless://uuid@host:port?...` format.
 
+## [0.5.70] - 2026-04-30
+
+- Bump OpenClaw to 2026.4.27.
+
+## [0.5.66] - 2026-04-04
+
+### Fixed
+- **"Open Gateway Web UI" button missing token on first boot / post-onboard** (issue #102): the gateway token was read once at startup, before `openclaw onboard` had a chance to write `openclaw.json`. The landing page now re-renders automatically in the background (up to ~2 min after startup) once the token appears in `openclaw.json`, and nginx is reloaded with SIGHUP — no add-on restart required. Existing installs with a token already present are unaffected.
+
+## [0.5.65] - 2026-04-04
+
+### Changed
+- Bump OpenClaw to 2026.4.2.
+
 ## [0.5.63] - 2026-03-14
 
 ### Changed
@@ -31,7 +45,7 @@ All notable changes to the OpenClaw Assistant Home Assistant Add-on will be docu
 ## [0.5.62] - 2026-03-10
 
 ### Fixed
-- **Gateway restart loop** (issue #95): `openclaw gateway run` is a thin wrapper that spawns `openclaw-gateway` as a long-running daemon then exits. The supervisor had two bugs: (1) `pgrep` pattern `"openclaw.*(gateway|node).*run"` never matched the daemon name `openclaw-gateway`, so self-restarts were never detected; (2) after re-tracking a self-restarted PID, `wait` failed with "pid N is not a child of this shell" (exit 127) because the new daemon was spawned by the old one, not by run.sh. The supervisor loop now uses `pgrep -f "openclaw-gateway"` for reliable daemon detection and switches to `kill -0` polling for non-child PIDs instead of `wait`. The loopback relay (tailnet mode) is also stopped/restarted around supervisor-initiated gateway restarts to prevent port conflicts.
+- **Gateway restart loop** (issue #95): `openclaw gateway run` is a thin wrapper that spawns `openclaw-gateway` as a long-running daemon then exits immediately. On self-restart (SIGUSR1 / `openclaw gateway restart`), the old daemon forks a new one and exits — the new PID is not a child of run.sh. The supervisor now uses a 3-tier daemon detection function (`find_gateway_daemon_pid`): (1) port ownership via `ss -tlnp`, (2) process title via `pgrep -f "openclaw-gateway"`, (3) `/proc/*/cmdline` scan for "openclaw" (catches the daemon immediately after fork, even before process.title or port bind — critical on Pi/eMMC where initialization takes 20-30 s). Detection retries up to 10 times with a final port-occupancy guard before any supervisor-initiated restart. Non-child PIDs are monitored with `kill -0` polling instead of `wait`. The loopback relay (tailnet mode) is stopped/restarted around gateway restarts to prevent port conflicts.
 
 ## [0.5.60] - 2026-03-10
 
