@@ -2,6 +2,11 @@
 
 All notable changes to the OpenClaw Assistant Home Assistant Add-on will be documented in this file.
 
+## [0.5.72] - 2026-05-03
+
+### Fixed
+- VLESS bridge readiness checks no longer send an empty request to the local `sing-box` mixed proxy, avoiding misleading `malformed HTTP request ""` errors in `sing-box.log` during startup.
+
 ## [0.5.71] - 2026-05-03
 
 ### Added

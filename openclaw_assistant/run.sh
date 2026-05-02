@@ -122,6 +122,17 @@ cleanup_outbound_proxy() {
   fi
 }
 
+singbox_proxy_port_ready() {
+  if command -v ss >/dev/null 2>&1; then
+    ss -H -tln "sport = :${SINGBOX_PROXY_PORT}" 2>/dev/null | grep -q .
+    return
+  fi
+
+  # Fallback for minimal images without ss. This only opens and closes a socket;
+  # unlike echo >/dev/tcp, it does not send a blank HTTP request to mixed-in.
+  (: <"/dev/tcp/127.0.0.1/${SINGBOX_PROXY_PORT}") >/dev/null 2>&1
+}
+
 start_vless_http_proxy_bridge() {
   local vless_uri="$1"
   local ready="false"
@@ -152,7 +163,7 @@ start_vless_http_proxy_bridge() {
     if ! kill -0 "${SINGBOX_PID}" >/dev/null 2>&1; then
       break
     fi
-    if (echo >"/dev/tcp/127.0.0.1/${SINGBOX_PROXY_PORT}") >/dev/null 2>&1; then
+    if singbox_proxy_port_ready; then
       ready="true"
       break
     fi
